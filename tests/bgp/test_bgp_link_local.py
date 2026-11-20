@@ -312,6 +312,12 @@ def configure_unnumbered_bgp(setup_info):
 
     wait_until(30, 3, 0, old_neighbor_removed)
 
+    # Keep the SAI RIF when the last global address is removed. Without this,
+    # SONiC deletes the INTERFACE/PORTCHANNEL_INTERFACE entry and orchagent
+    # removes the RIF, so hardware stops receiving IPv6 RAs and FRR unnumbered
+    # peers stay in Idle state.
+    duthost.shell(f"sudo config interface ipv6 enable use-link-local-only {dut_intf}")
+
     # Configure unnumbered BGP on DUT.
     # NOTE: 'v6only' is required — without it FRR auto-picks the peer's IPv4
     # address from the /31 on the PortChannel (since SONiC configures both
@@ -349,7 +355,10 @@ def configure_unnumbered_bgp(setup_info):
     logger.info("Enable IPv6 RAs on EOS %s (required for FRR unnumbered peer discovery)",
                 neigh_pc_intf)
     neigh_host.eos_config(
-        lines=["no ipv6 nd ra disabled"],
+        lines=[
+            "no ipv6 nd ra disabled",
+            "ipv6 nd ra interval 10",
+        ],
         parents="interface {}".format(neigh_pc_intf))
 
     logger.info("Configure interface-based BGP peering on EOS via %s (peer-group %s)",
